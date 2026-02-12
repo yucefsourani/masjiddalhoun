@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>لوحة بيانات المسجد</title>
+    <meta name="description" content="لوحة بيانات المسجد - أوقات الصلاة والتاريخ الهجري والطقس">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=Cairo:wght@400;600;700;800;900&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+    <div class="dashboard">
+        <!-- Header -->
+        <header class="header" id="header">
+            <div class="header-content">
+                <img id="mosque-icon" class="mosque-icon hidden" src="" alt="أيقونة المسجد">
+                <h1 id="mosque-name" class="mosque-name">جاري التحميل...</h1>
+            </div>
+            <div class="header-decoration">
+                <div class="decoration-line"></div>
+                <div class="decoration-diamond">◆</div>
+                <div class="decoration-line"></div>
+            </div>
+        </header>
+
+        <!-- Date & Time Section -->
+        <section class="datetime-section">
+            <div class="datetime-grid">
+                <div class="datetime-card day-card">
+                    <span class="datetime-label">اليوم</span>
+                    <span id="day-name" class="datetime-value day-value">---</span>
+                </div>
+                <div class="datetime-card time-card">
+                    <span class="datetime-label">الوقت</span>
+                    <span id="current-time" class="datetime-value time-value">--:--:--</span>
+                </div>
+                <div class="datetime-card date-card">
+                    <span class="datetime-label">التاريخ الميلادي</span>
+                    <span id="gregorian-date" class="datetime-value">----/--/--</span>
+                </div>
+                <div class="datetime-card hijri-card">
+                    <span class="datetime-label">التاريخ الهجري</span>
+                    <span id="hijri-date" class="datetime-value">----/--/--</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- Prayer Times Section -->
+        <section class="prayer-section">
+            <h2 class="section-title">
+                <span class="section-icon">🕌</span>
+                مواقيت الصلاة
+            </h2>
+            <div class="prayer-grid" id="prayer-grid">
+                <!-- Prayer cards will be injected by JS -->
+            </div>
+            <div class="countdown-bar" id="countdown-bar">
+                <div class="countdown-inner">
+                    <span class="countdown-label">الوقت المتبقي للصلاة التالية</span>
+                    <span id="countdown-timer" class="countdown-timer">--:--:--</span>
+                </div>
+                <div class="countdown-progress" id="countdown-progress"></div>
+            </div>
+        </section>
+
+        <!-- Weather Section -->
+        <section class="weather-section" id="weather-section">
+            <div class="weather-card">
+                <div class="weather-icon-wrap">
+                    <span id="weather-icon" class="weather-emoji">🌤️</span>
+                </div>
+                <div class="weather-info">
+                    <span id="weather-temp" class="weather-temp">--°</span>
+                    <span id="weather-desc" class="weather-desc">جاري التحميل...</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- Daily Message Section -->
+        <section class="message-section hidden" id="message-section">
+            <div class="message-card">
+                <div class="message-ornament">❁</div>
+                <p id="daily-message" class="daily-message"></p>
+                <div class="message-ornament">❁</div>
+            </div>
+        </section>
+
+        <!-- Refresh Button -->
+        <footer class="refresh-footer">
+            <button class="refresh-btn" onclick="location.reload()" title="إعادة تحميل الصفحة">
+                <span class="refresh-icon">🔄</span>
+                <span>تحديث</span>
+            </button>
+        </footer>
+    </div>
+
+    <!-- Config is loaded inline to work with file:// protocol and GitHub Pages -->
+    <script src="config.js"></script>
+    <script src="script.js"></script>
+</body>
+
+</html>
