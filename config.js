@@ -88,12 +88,12 @@ var MOSQUE_CONFIG = {
 
     // ──── معامل تعديل أوقات الصلاة بالدقائق (+ للتأخير، - للتقديم) ────
     adjustments: {
-        Fajr: 0,
-        Sunrise: 0,
-        Dhuhr: 0,
+        Fajr: -6,
+        Sunrise: -9,
+        Dhuhr: -5,
         Asr: 0,
-        Maghrib: 3,
-        Isha: 0
+        Maghrib: 4,
+        Isha: -3
     },
 
     // ──── معامل تعديل وقت الإمساك بالدقائق (سالب = قبل الفجر) ────
