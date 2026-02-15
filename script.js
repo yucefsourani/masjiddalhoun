@@ -18,6 +18,8 @@
     var imsakTime = null;
     var hijriDateStr = '';
     var lastNextIdx = -1;
+    var iqamaPlayed = false;
+    var currentAudio = null;
 
     // Prayer definitions (order matters)
     var PRAYERS = [
@@ -141,6 +143,7 @@
         try { setupBackground(); } catch (e) { console.error('Background error:', e); }
         try { setupHeader(); } catch (e) { console.error('Header error:', e); }
         try { setupDailyMessage(); } catch (e) { console.error('Message error:', e); }
+        try { setupRefreshButton(); } catch (e) { console.error('Refresh button error:', e); }
         try { startClock(); } catch (e) { console.error('Clock error:', e); }
 
         // API calls (async, non-blocking)
@@ -185,6 +188,17 @@
             var msgEl = document.getElementById('daily-message');
             msgEl.textContent = CONFIG.dailyMessage;
             section.classList.remove('hidden');
+        }
+    }
+
+    // ============================
+    //  REFRESH BUTTON
+    // ============================
+
+    function setupRefreshButton() {
+        var btn = document.getElementById('refresh-btn');
+        if (btn) {
+            btn.addEventListener('click', function () { location.reload(); });
         }
     }
 
@@ -237,6 +251,7 @@
             // Update countdown if we have prayer data
             if (prayerTimesData) {
                 updateCountdown();
+                updateIqamaCountdown();
             }
 
         } catch (e) {
@@ -306,16 +321,40 @@
     function showPrayerError() {
         var grid = document.getElementById('prayer-grid');
         if (grid) {
-            grid.innerHTML = '<div class="prayer-error">'
-                + '<span class="prayer-error-icon">⚠️</span>'
-                + '<span class="prayer-error-text">تعذّر جلب مواقيت الصلاة</span>'
-                + '<span class="prayer-error-sub">يرجى التحقق من اتصال الإنترنت — إعادة المحاولة تلقائياً كل 30 ثانية...</span>'
-                + '<button class="prayer-error-btn" onclick="location.reload()">إعادة المحاولة الآن</button>'
-                + '</div>';
+            grid.innerHTML = '';
+            var errorDiv = document.createElement('div');
+            errorDiv.className = 'prayer-error';
+
+            var iconSpan = document.createElement('span');
+            iconSpan.className = 'prayer-error-icon';
+            iconSpan.textContent = '⚠️';
+
+            var textSpan = document.createElement('span');
+            textSpan.className = 'prayer-error-text';
+            textSpan.textContent = 'تعذّر جلب مواقيت الصلاة';
+
+            var subSpan = document.createElement('span');
+            subSpan.className = 'prayer-error-sub';
+            subSpan.textContent = 'يرجى التحقق من اتصال الإنترنت — إعادة المحاولة تلقائياً كل 30 ثانية...';
+
+            var btn = document.createElement('button');
+            btn.className = 'prayer-error-btn';
+            btn.textContent = 'إعادة المحاولة الآن';
+            btn.addEventListener('click', function () { location.reload(); });
+
+            errorDiv.appendChild(iconSpan);
+            errorDiv.appendChild(textSpan);
+            errorDiv.appendChild(subSpan);
+            errorDiv.appendChild(btn);
+            grid.appendChild(errorDiv);
         }
         var countdown = document.getElementById('countdown-bar');
         if (countdown) {
             countdown.style.display = 'none';
+        }
+        var iqamaBar = document.getElementById('iqama-bar');
+        if (iqamaBar) {
+            iqamaBar.classList.add('hidden');
         }
 
         // Auto-retry every 30 seconds
@@ -433,30 +472,45 @@
                 card.classList.add('current-prayer');
             }
 
-            var badgeHtml = '';
-            if (i === nextIdx) {
-                badgeHtml = '<span class="prayer-badge">التالية</span>';
-            } else if (i === currentIdx) {
-                badgeHtml = '<span class="prayer-badge">الحالية</span>';
+            // Badge
+            if (i === nextIdx || i === currentIdx) {
+                var badge = document.createElement('span');
+                badge.className = 'prayer-badge';
+                badge.textContent = (i === nextIdx) ? 'التالية' : 'الحالية';
+                card.appendChild(badge);
             }
 
-            // Format prayer time for display (12h or 24h)
-            var prayerDisplayTime = formatTimeForDisplay(prayerTimesData[prayer.key]);
+            // Icon
+            var iconSpan = document.createElement('span');
+            iconSpan.className = 'prayer-icon';
+            iconSpan.textContent = prayer.icon;
+            card.appendChild(iconSpan);
 
-            var imsakHtml = '';
+            // Name
+            var nameSpan = document.createElement('span');
+            nameSpan.className = 'prayer-name';
+            nameSpan.textContent = prayer.nameAr;
+            card.appendChild(nameSpan);
+
+            // Time
+            var timeSpan = document.createElement('span');
+            timeSpan.className = 'prayer-time';
+            timeSpan.textContent = formatTimeForDisplay(prayerTimesData[prayer.key]);
+            card.appendChild(timeSpan);
+
+            // Imsak badge (Fajr only)
             if (prayer.key === 'Fajr' && imsakTime) {
-                var imsakDisplayTime = formatTimeForDisplay(imsakTime);
-                imsakHtml = '<div class="imsak-badge">'
-                    + '<span>الإمساك</span>'
-                    + '<span class="imsak-time">' + imsakDisplayTime + '</span>'
-                    + '</div>';
+                var imsakDiv = document.createElement('div');
+                imsakDiv.className = 'imsak-badge';
+                var imsakLabel = document.createElement('span');
+                imsakLabel.textContent = 'الإمساك';
+                var imsakTimeSpan = document.createElement('span');
+                imsakTimeSpan.className = 'imsak-time';
+                imsakTimeSpan.textContent = formatTimeForDisplay(imsakTime);
+                imsakDiv.appendChild(imsakLabel);
+                imsakDiv.appendChild(imsakTimeSpan);
+                card.appendChild(imsakDiv);
             }
-
-            card.innerHTML = badgeHtml
-                + '<span class="prayer-icon">' + prayer.icon + '</span>'
-                + '<span class="prayer-name">' + prayer.nameAr + '</span>'
-                + '<span class="prayer-time">' + prayerDisplayTime + '</span>'
-                + imsakHtml;
 
             grid.appendChild(card);
         }
@@ -544,6 +598,7 @@
                 }
             }
             lastNextIdx = nextIdx;
+            iqamaPlayed = false; // Reset iqama flag on prayer transition
             renderPrayerCards();
         }
     }
@@ -560,33 +615,146 @@
         return a;
     }
 
-    // Try to play a random adhan from the list, skip missing files silently
-    function playRandomAdhan(list) {
-        var shuffled = shuffleArray(list);
-        tryNextSound(shuffled, 0);
+    function isAudioPlaying() {
+        return currentAudio && !currentAudio.paused && !currentAudio.ended;
     }
 
-    function tryNextSound(files, index) {
-        if (index >= files.length) return; // all failed, stay silent
+    // Filter sound list to only existing files, then play one randomly
+    function playRandomAdhan(list) {
+        if (!list || list.length === 0) return;
 
+        // Check which files actually exist by probing with Audio elements
+        var remaining = list.length;
+        var existing = [];
+
+        list.forEach(function (file) {
+            var probe = new Audio();
+            var settled = false;
+
+            function settle(found) {
+                if (settled) return;
+                settled = true;
+                if (found) existing.push(file);
+                remaining--;
+
+                // All files checked — pick one randomly
+                if (remaining === 0) {
+                    if (existing.length === 0) return; // no files found, stay silent
+                    var picked = existing[Math.floor(Math.random() * existing.length)];
+                    playSound(picked);
+                }
+            }
+
+            probe.addEventListener('canplaythrough', function () { settle(true); });
+            probe.addEventListener('error', function () { settle(false); });
+
+            // Timeout fallback (3 seconds)
+            setTimeout(function () { settle(false); }, 3000);
+
+            probe.preload = 'auto';
+            probe.src = file;
+        });
+    }
+
+    function playSound(file) {
         try {
-            var audio = new Audio(files[index]);
+            var audio = new Audio(file);
 
-            audio.addEventListener('canplaythrough', function () {
-                audio.play().catch(function () { /* silent */ });
+            audio.addEventListener('ended', function () {
+                if (currentAudio === audio) currentAudio = null;
             });
 
-            audio.addEventListener('error', function () {
-                // File not found or can't load — try next
-                tryNextSound(files, index + 1);
+            currentAudio = audio;
+            audio.play().catch(function () {
+                if (currentAudio === audio) currentAudio = null;
             });
+        } catch (e) { /* silent */ }
+    }
 
-            audio.load();
-        } catch (e) {
-            // Fallback: try next file
-            tryNextSound(files, index + 1);
+    // ============================
+    //  IQAMA COUNTDOWN
+    // ============================
+
+    function updateIqamaCountdown() {
+        if (!prayerTimesData) return;
+
+        var iqamaBar = document.getElementById('iqama-bar');
+        var iqamaTimerEl = document.getElementById('iqama-timer');
+        if (!iqamaBar || !iqamaTimerEl) return;
+
+        var offsets = CONFIG.iqamaOffsets || {};
+        var indices = getCurrentAndNextPrayer();
+        var currentIdx = indices.currentIdx;
+        var currentPrayer = PRAYERS[currentIdx];
+
+        // Skip Sunrise — it's not a prayer
+        if (!currentPrayer || currentPrayer.key === 'Sunrise') {
+            iqamaBar.classList.add('hidden');
+            return;
+        }
+
+        var prayerKey = currentPrayer.key;
+        var offset = offsets[prayerKey];
+
+        // If no offset defined or offset is 0, hide the bar
+        if (!offset || offset <= 0) {
+            iqamaBar.classList.add('hidden');
+            return;
+        }
+
+        var prayerMin = timeToMinutes(prayerTimesData[prayerKey]);
+        var iqamaMin = prayerMin + offset;
+        var currentMin = getCurrentMinutes();
+
+        // Handle wrap-around at midnight
+        var diffFromPrayer = currentMin - prayerMin;
+        if (diffFromPrayer < 0) diffFromPrayer += 1440;
+
+        var diffToIqama = iqamaMin - currentMin;
+        if (diffToIqama < 0) diffToIqama += 1440;
+
+        // Only show if we are between prayer time and iqama time
+        // i.e. diffFromPrayer >= 0 and diffFromPrayer < offset
+        if (diffFromPrayer >= 0 && diffFromPrayer < offset) {
+            // Still counting down to iqama
+            var totalSeconds = Math.max(0, Math.floor(diffToIqama * 60));
+
+            if (totalSeconds > 0) {
+                var mins = Math.floor(totalSeconds / 60);
+                var secs = totalSeconds % 60;
+                iqamaTimerEl.textContent = pad(mins) + ':' + pad(secs);
+
+                iqamaBar.classList.remove('hidden');
+
+                // Alert animation in the last 60 seconds
+                if (totalSeconds <= 60) {
+                    iqamaBar.classList.add('iqama-alert');
+                } else {
+                    iqamaBar.classList.remove('iqama-alert');
+                }
+            } else {
+                // Time is up — hide bar and play sound
+                iqamaBar.classList.add('hidden');
+                iqamaBar.classList.remove('iqama-alert');
+
+                if (!iqamaPlayed) {
+                    iqamaPlayed = true;
+                    // Skip iqama sound if adhan is still playing (adhan has priority)
+                    if (!isAudioPlaying()) {
+                        var iqamaSounds = CONFIG.iqamaSounds || [];
+                        if (iqamaSounds.length > 0) {
+                            playRandomAdhan(iqamaSounds);
+                        }
+                    }
+                }
+            }
+        } else {
+            // Not in iqama countdown period
+            iqamaBar.classList.add('hidden');
+            iqamaBar.classList.remove('iqama-alert');
         }
     }
+
     // ============================
     //  WEATHER (Open-Meteo API — free, no key, no limits)
     // ============================

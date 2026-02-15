@@ -6,6 +6,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>لوحة بيانات المسجد</title>
     <meta name="description" content="لوحة بيانات المسجد - أوقات الصلاة والتاريخ الهجري والطقس">
+    <meta http-equiv="Content-Security-Policy"
+        content="default-src 'none'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src https://api.aladhan.com https://api.open-meteo.com; media-src 'self';">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link
@@ -68,6 +70,13 @@
                 </div>
                 <div class="countdown-progress" id="countdown-progress"></div>
             </div>
+            <div class="iqama-bar hidden" id="iqama-bar">
+                <div class="iqama-inner">
+                    <span class="iqama-label">⏳ الوقت المتبقي للإقامة</span>
+                    <span id="iqama-timer" class="iqama-timer">--:--</span>
+                </div>
+                <div class="iqama-progress" id="iqama-progress"></div>
+            </div>
         </section>
 
         <!-- Weather Section -->
@@ -94,7 +103,7 @@
 
         <!-- Refresh Button -->
         <footer class="refresh-footer">
-            <button class="refresh-btn" onclick="location.reload()" title="إعادة تحميل الصفحة">
+            <button id="refresh-btn" class="refresh-btn" title="إعادة تحميل الصفحة">
                 <span class="refresh-icon">🔄</span>
                 <span>تحديث</span>
             </button>

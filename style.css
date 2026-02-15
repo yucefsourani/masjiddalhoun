@@ -571,6 +571,89 @@ body::after {
     border-radius: 2px;
 }
 
+/* --- Iqama Countdown Bar --- */
+.iqama-bar {
+    margin-top: 12px;
+    background: linear-gradient(145deg, rgba(16, 185, 129, 0.08), var(--bg-card));
+    border: 1px solid rgba(16, 185, 129, 0.3);
+    border-radius: var(--radius-md);
+    padding: 14px 24px;
+    position: relative;
+    overflow: hidden;
+    transition: all 0.4s ease;
+}
+
+.iqama-inner {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    gap: 4px;
+    position: relative;
+    z-index: 1;
+}
+
+.iqama-label {
+    font-size: 0.85rem;
+    color: var(--accent-current);
+    font-weight: 700;
+    letter-spacing: 0.5px;
+}
+
+.iqama-timer {
+    font-size: clamp(1.3rem, 3.5vw, 1.8rem);
+    font-weight: 900;
+    color: var(--accent-current);
+    font-variant-numeric: tabular-nums;
+    direction: ltr;
+    text-shadow: 0 0 18px var(--accent-current-glow);
+}
+
+.iqama-progress {
+    position: absolute;
+    bottom: 0;
+    right: 0;
+    width: 100%;
+    height: 3px;
+    background: linear-gradient(90deg, var(--accent-current), var(--teal-primary));
+    border-radius: 2px;
+}
+
+/* --- Iqama Alert Animation (last 60 seconds) --- */
+@keyframes iqamaAlertPulse {
+    0%, 100% {
+        box-shadow: 0 0 15px rgba(245, 158, 11, 0.3);
+        border-color: rgba(245, 158, 11, 0.5);
+    }
+    50% {
+        box-shadow: 0 0 40px rgba(245, 158, 11, 0.6), 0 0 70px rgba(212, 169, 84, 0.3);
+        border-color: rgba(245, 158, 11, 0.9);
+    }
+}
+
+@keyframes iqamaAlertText {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+}
+
+.iqama-alert {
+    animation: iqamaAlertPulse 0.7s ease-in-out infinite !important;
+    border-color: rgba(245, 158, 11, 0.6) !important;
+    background: linear-gradient(145deg, rgba(245, 158, 11, 0.1), var(--bg-card)) !important;
+}
+
+.iqama-alert .iqama-timer {
+    animation: iqamaAlertText 0.7s ease-in-out infinite;
+    color: #f59e0b !important;
+    text-shadow: 0 0 20px rgba(245, 158, 11, 0.5);
+}
+
+.iqama-alert .iqama-label {
+    animation: iqamaAlertText 0.7s ease-in-out infinite;
+    color: #fbbf24 !important;
+}
+
 /* ==============================
    WEATHER
    ============================== */
