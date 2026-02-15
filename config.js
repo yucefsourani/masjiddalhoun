@@ -90,7 +90,7 @@ var MOSQUE_CONFIG = {
     adjustments: {
         Fajr: -6,
         Sunrise: -9,
-        Dhuhr: -260,// -5
+        Dhuhr: -5,
         Asr: 0,
         Maghrib: 4,
         Isha: -3
@@ -115,10 +115,10 @@ var MOSQUE_CONFIG = {
     // ──── وقت الإقامة بعد الأذان بالدقائق لكل صلاة ────
     // القيمة تمثل عدد الدقائق بين الأذان والإقامة (0 = تعطيل الإقامة لهذه الصلاة)
     iqamaOffsets: {
-        Fajr: 10,
-        Dhuhr: 1,
+        Fajr: 15,
+        Dhuhr: 10,
         Asr: 10,
-        Maghrib: 5,
+        Maghrib: 10,
         Isha: 10
     },
 
