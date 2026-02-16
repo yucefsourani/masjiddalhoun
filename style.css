@@ -622,10 +622,13 @@ body::after {
 
 /* --- Iqama Alert Animation (last 60 seconds) --- */
 @keyframes iqamaAlertPulse {
-    0%, 100% {
+
+    0%,
+    100% {
         box-shadow: 0 0 15px rgba(245, 158, 11, 0.3);
         border-color: rgba(245, 158, 11, 0.5);
     }
+
     50% {
         box-shadow: 0 0 40px rgba(245, 158, 11, 0.6), 0 0 70px rgba(212, 169, 84, 0.3);
         border-color: rgba(245, 158, 11, 0.9);
@@ -633,8 +636,15 @@ body::after {
 }
 
 @keyframes iqamaAlertText {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.4; }
+
+    0%,
+    100% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.4;
+    }
 }
 
 .iqama-alert {
@@ -940,4 +950,96 @@ body::after {
 
 .dashboard>*:nth-child(5) {
     animation-delay: 0.45s;
+}
+
+/* ============================
+   AUDIO UNLOCK BANNER
+   ============================ */
+
+.audio-unlock-banner {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 16px 24px;
+    background: linear-gradient(135deg, #1a5276, #2e86c1);
+    color: #fff;
+    cursor: pointer;
+    font-family: 'Cairo', sans-serif;
+    font-size: 1.1rem;
+    font-weight: 700;
+    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.3);
+    animation: audioSlideUp 0.5s ease-out;
+    transition: opacity 0.4s ease, transform 0.4s ease;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+.audio-unlock-banner:hover {
+    background: linear-gradient(135deg, #1e6a9c, #3498db);
+}
+
+.audio-unlock-icon {
+    font-size: 1.5rem;
+    animation: audioIconBounce 2s ease-in-out infinite;
+}
+
+.audio-unlock-text {
+    letter-spacing: 0.5px;
+}
+
+/* Pulse effect when adhan fires but audio is still locked */
+.audio-unlock-banner.audio-unlock-pulse {
+    animation: audioPulse 0.6s ease-in-out infinite;
+    background: linear-gradient(135deg, #922b21, #e74c3c);
+}
+
+/* Fade out after unlock */
+.audio-unlock-banner.audio-unlocked {
+    opacity: 0;
+    transform: translateY(100%);
+    pointer-events: none;
+}
+
+@keyframes audioSlideUp {
+    from {
+        transform: translateY(100%);
+        opacity: 0;
+    }
+
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+@keyframes audioIconBounce {
+
+    0%,
+    100% {
+        transform: scale(1);
+    }
+
+    50% {
+        transform: scale(1.2);
+    }
+}
+
+@keyframes audioPulse {
+
+    0%,
+    100% {
+        transform: scale(1);
+        box-shadow: 0 -4px 20px rgba(231, 76, 60, 0.5);
+    }
+
+    50% {
+        transform: scale(1.02);
+        box-shadow: 0 -4px 30px rgba(231, 76, 60, 0.8);
+    }
 }

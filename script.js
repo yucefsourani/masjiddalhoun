@@ -20,6 +20,9 @@
     var lastNextIdx = -1;
     var iqamaPlayed = false;
     var currentAudio = null;
+    var audioUnlocked = false;
+    var audioContext = null;
+    var pendingSound = null;
 
     // Prayer definitions (order matters)
     var PRAYERS = [
@@ -137,7 +140,6 @@
     // ============================
 
     function init() {
-        console.log('Dashboard initializing with config:', CONFIG.mosqueName);
 
         // Each section initializes independently
         try { setupBackground(); } catch (e) { console.error('Background error:', e); }
@@ -145,10 +147,166 @@
         try { setupDailyMessage(); } catch (e) { console.error('Message error:', e); }
         try { setupRefreshButton(); } catch (e) { console.error('Refresh button error:', e); }
         try { startClock(); } catch (e) { console.error('Clock error:', e); }
+        try { setupAudioUnlock(); } catch (e) { console.error('Audio unlock error:', e); }
 
         // API calls (async, non-blocking)
         fetchPrayerTimes();
         fetchWeather();
+    }
+
+    // ============================
+    //  AUDIO UNLOCK (Autoplay Policy)
+    // ============================
+    // Browsers block audio.play() unless the user has interacted with the page.
+    // This creates a banner prompting the user to click, which unlocks audio.
+
+    function setupAudioUnlock() {
+        // Check if audio needs any config at all
+        var hasAdhan = (CONFIG.adhanSounds && CONFIG.adhanSounds.length > 0)
+            || (CONFIG.fajrAdhanSounds && CONFIG.fajrAdhanSounds.length > 0);
+        var hasIqama = CONFIG.iqamaSounds && CONFIG.iqamaSounds.length > 0;
+
+        if (!hasAdhan && !hasIqama) {
+            // No sounds configured — no need for banner
+            audioUnlocked = true;
+            return;
+        }
+
+        // Check if user has previously approved audio
+        var previouslyApproved = false;
+        try { previouslyApproved = localStorage.getItem('audio_approved') === 'true'; } catch (e) { /* ignore */ }
+
+        if (previouslyApproved) {
+            // Try to silently auto-unlock (works on most browsers for returning visitors)
+            trySilentUnlock();
+        } else {
+            // First visit — show the banner
+            showAudioBanner();
+            addGlobalUnlockListeners();
+        }
+    }
+
+    function trySilentUnlock() {
+        try {
+            var AC = window.AudioContext || window.webkitAudioContext;
+            if (AC) {
+                audioContext = new AC();
+                if (audioContext.state === 'running') {
+                    // AudioContext already running — audio is allowed
+                    audioUnlocked = true;
+                    console.log('Audio auto-unlocked (returning visitor)');
+                    return;
+                }
+
+                // Try to resume — some browsers allow this for returning visitors
+                audioContext.resume().then(function () {
+                    if (audioContext.state === 'running') {
+                        audioUnlocked = true;
+                        console.log('Audio auto-unlocked via AudioContext resume');
+                    } else {
+                        // Browser still blocking — show banner as fallback
+                        showAudioBanner();
+                        addGlobalUnlockListeners();
+                    }
+                }).catch(function () {
+                    showAudioBanner();
+                    addGlobalUnlockListeners();
+                });
+            } else {
+                // No AudioContext support — assume it works
+                audioUnlocked = true;
+            }
+        } catch (e) {
+            showAudioBanner();
+            addGlobalUnlockListeners();
+        }
+    }
+
+    function addGlobalUnlockListeners() {
+        var unlockEvents = ['click', 'touchstart', 'keydown'];
+        function globalUnlock() {
+            unlockAudio();
+            unlockEvents.forEach(function (evt) {
+                document.removeEventListener(evt, globalUnlock);
+            });
+        }
+        unlockEvents.forEach(function (evt) {
+            document.addEventListener(evt, globalUnlock, { once: false });
+        });
+    }
+
+    function showAudioBanner() {
+        // Create banner element if it doesn't exist
+        var existing = document.getElementById('audio-unlock-banner');
+        if (existing) return;
+
+        var banner = document.createElement('div');
+        banner.id = 'audio-unlock-banner';
+        banner.className = 'audio-unlock-banner';
+
+        var iconSpan = document.createElement('span');
+        iconSpan.className = 'audio-unlock-icon';
+        iconSpan.textContent = '\uD83D\uDD07';
+
+        var textSpan = document.createElement('span');
+        textSpan.className = 'audio-unlock-text';
+        textSpan.textContent = '\u0627\u0636\u063A\u0637 \u0647\u0646\u0627 \u0644\u062A\u0641\u0639\u064A\u0644 \u0635\u0648\u062A \u0627\u0644\u0623\u0630\u0627\u0646';
+
+        banner.appendChild(iconSpan);
+        banner.appendChild(textSpan);
+        banner.addEventListener('click', function () {
+            unlockAudio();
+        });
+
+        document.body.appendChild(banner);
+    }
+
+    function unlockAudio() {
+        if (audioUnlocked) return;
+
+        try {
+            // Create and resume AudioContext to satisfy browser autoplay policy
+            var AC = window.AudioContext || window.webkitAudioContext;
+            if (AC) {
+                if (!audioContext) audioContext = new AC();
+                if (audioContext.state === 'suspended') {
+                    audioContext.resume();
+                }
+            }
+
+            // Play a tiny silent buffer to fully unlock the audio pipeline
+            var silentAudio = new Audio('data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=');
+            silentAudio.volume = 0;
+            silentAudio.play().then(function () {
+                silentAudio.pause();
+                silentAudio = null;
+            }).catch(function () { /* ignore */ });
+
+        } catch (e) {
+            console.warn('AudioContext unlock failed:', e);
+        }
+
+        audioUnlocked = true;
+        console.log('Audio unlocked by user interaction');
+
+        // Save approval permanently
+        try { localStorage.setItem('audio_approved', 'true'); } catch (e) { /* ignore */ }
+
+        // Hide banner
+        var banner = document.getElementById('audio-unlock-banner');
+        if (banner) {
+            banner.classList.add('audio-unlocked');
+            setTimeout(function () {
+                if (banner.parentNode) banner.parentNode.removeChild(banner);
+            }, 500);
+        }
+
+        // Play pending sound if one was queued while locked
+        if (pendingSound) {
+            var file = pendingSound;
+            pendingSound = null;
+            playSound(file);
+        }
     }
 
     // ============================
@@ -272,12 +430,12 @@
             + '&method=' + CONFIG.calculationMethod
             + '&timezonestring=' + encodeURIComponent(CONFIG.timezone);
 
-        console.log('Fetching prayer times:', url);
-
         fetch(url)
-            .then(function (res) { return res.json(); })
+            .then(function (res) {
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                return res.json();
+            })
             .then(function (data) {
-                console.log('Prayer API response received');
                 if (data.code === 200 && data.data) {
                     var timings = data.data.timings;
 
@@ -360,7 +518,6 @@
         // Auto-retry every 30 seconds
         if (!retryTimer) {
             retryTimer = setInterval(function () {
-                console.log('Auto-retrying prayer times fetch...');
                 fetchPrayerTimesRetry();
             }, 30000);
         }
@@ -376,7 +533,10 @@
             + '&timezonestring=' + encodeURIComponent(CONFIG.timezone);
 
         fetch(url)
-            .then(function (res) { return res.json(); })
+            .then(function (res) {
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                return res.json();
+            })
             .then(function (data) {
                 if (data.code === 200 && data.data) {
                     // Success — clear retry timer
@@ -408,7 +568,6 @@
                     lastNextIdx = -1;
                     renderPrayerCards();
                     updateCountdown();
-                    console.log('Prayer times retry succeeded!');
                 }
             })
             .catch(function (err) {
@@ -619,44 +778,64 @@
         return currentAudio && !currentAudio.paused && !currentAudio.ended;
     }
 
-    // Filter sound list to only existing files, then play one randomly
+    // Pick a random sound from the list and try to play it.
+    // If it fails (file not found), try the next one.
     function playRandomAdhan(list) {
         if (!list || list.length === 0) return;
 
-        // Check which files actually exist by probing with Audio elements
-        var remaining = list.length;
-        var existing = [];
+        var shuffled = shuffleArray(list);
+        tryPlayFromList(shuffled, 0);
+    }
 
-        list.forEach(function (file) {
-            var probe = new Audio();
-            var settled = false;
+    function tryPlayFromList(files, index) {
+        if (index >= files.length) return; // all files failed, stay silent
 
-            function settle(found) {
-                if (settled) return;
-                settled = true;
-                if (found) existing.push(file);
-                remaining--;
+        var file = files[index];
 
-                // All files checked — pick one randomly
-                if (remaining === 0) {
-                    if (existing.length === 0) return; // no files found, stay silent
-                    var picked = existing[Math.floor(Math.random() * existing.length)];
-                    playSound(picked);
-                }
-            }
+        if (!audioUnlocked) {
+            // Audio not yet unlocked — queue and pulse banner
+            pendingSound = file;
+            var banner = document.getElementById('audio-unlock-banner');
+            if (banner) banner.classList.add('audio-unlock-pulse');
+            console.warn('Audio not unlocked yet. Sound queued:', file);
+            return;
+        }
 
-            probe.addEventListener('canplaythrough', function () { settle(true); });
-            probe.addEventListener('error', function () { settle(false); });
+        try {
+            var audio = new Audio(file);
 
-            // Timeout fallback (3 seconds)
-            setTimeout(function () { settle(false); }, 3000);
+            audio.addEventListener('error', function () {
+                console.warn('Sound file not found, trying next:', file);
+                if (currentAudio === audio) currentAudio = null;
+                tryPlayFromList(files, index + 1);
+            });
 
-            probe.preload = 'auto';
-            probe.src = file;
-        });
+            audio.addEventListener('ended', function () {
+                if (currentAudio === audio) currentAudio = null;
+            });
+
+            currentAudio = audio;
+            audio.play().catch(function (err) {
+                console.warn('Audio play failed for:', file, err);
+                if (currentAudio === audio) currentAudio = null;
+                tryPlayFromList(files, index + 1);
+            });
+        } catch (e) {
+            console.error('Audio creation error:', e);
+            tryPlayFromList(files, index + 1);
+        }
     }
 
     function playSound(file) {
+        if (!audioUnlocked) {
+            // Audio not yet unlocked — queue the sound and pulse the banner
+            pendingSound = file;
+            var banner = document.getElementById('audio-unlock-banner');
+            if (banner) banner.classList.add('audio-unlock-pulse');
+            console.warn('Audio not unlocked yet. Sound queued:', file);
+            return;
+        }
+
         try {
             var audio = new Audio(file);
 
@@ -665,10 +844,13 @@
             });
 
             currentAudio = audio;
-            audio.play().catch(function () {
+            audio.play().catch(function (err) {
+                console.warn('Audio play failed:', err);
                 if (currentAudio === audio) currentAudio = null;
             });
-        } catch (e) { /* silent */ }
+        } catch (e) {
+            console.error('Audio creation error:', e);
+        }
     }
 
     // ============================
@@ -798,12 +980,12 @@
             + '&current=temperature_2m,weather_code'
             + '&timezone=' + encodeURIComponent(CONFIG.timezone);
 
-        console.log('Fetching weather:', url);
-
         fetch(url)
-            .then(function (res) { return res.json(); })
+            .then(function (res) {
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                return res.json();
+            })
             .then(function (data) {
-                console.log('Weather API response:', data);
                 if (data && data.current) {
                     var temp = Math.round(data.current.temperature_2m);
                     var code = data.current.weather_code;
@@ -832,7 +1014,6 @@
     function scheduleWeatherRetry() {
         if (!weatherRetryTimer) {
             weatherRetryTimer = setInterval(function () {
-                console.log('Auto-retrying weather fetch...');
                 fetchWeather();
             }, 30000);
         }
