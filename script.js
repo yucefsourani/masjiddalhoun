@@ -20,9 +20,9 @@
     var lastNextIdx = -1;
     var iqamaPlayed = false;
     var currentAudio = null;
-    var audioUnlocked = false;
+    var audioUnlocked = true; // Optimistic: assume unlocked, revert on actual failure
     var audioContext = null;
-    var pendingSound = null;
+    var pendingSoundList = null; // {files: [...], type: 'adhan'|'iqama'}
 
     // Prayer definitions (order matters)
     var PRAYERS = [
@@ -155,10 +155,8 @@
     }
 
     // ============================
-    //  AUDIO UNLOCK (Autoplay Policy)
+    //  AUDIO UNLOCK & PLAYBACK LOGIC
     // ============================
-    // Browsers block audio.play() unless the user has interacted with the page.
-    // This creates a banner prompting the user to click, which unlocks audio.
 
     function setupAudioUnlock() {
         // Check if audio needs any config at all
@@ -167,9 +165,7 @@
         var hasIqama = CONFIG.iqamaSounds && CONFIG.iqamaSounds.length > 0;
 
         if (!hasAdhan && !hasIqama) {
-            // No sounds configured — no need for banner
-            audioUnlocked = true;
-            return;
+            return; // No sounds configured, nothing to do
         }
 
         // Check if user has previously approved audio
@@ -177,49 +173,31 @@
         try { previouslyApproved = localStorage.getItem('audio_approved') === 'true'; } catch (e) { /* ignore */ }
 
         if (previouslyApproved) {
-            // Try to silently auto-unlock (works on most browsers for returning visitors)
-            trySilentUnlock();
+            // User approved before — stay optimistic (audioUnlocked = true by default)
+            console.log('Audio previously approved. Assuming unlocked.');
+            tryResumeAudioContext();
         } else {
-            // First visit — show the banner
-            showAudioBanner();
+            // First visit — STILL optimistic! We try to play directly.
+            // If it fails with NotAllowedError, THEN we show the banner.
+            // This covers kiosk mode with --autoplay-policy=no-user-gesture-required
+            // where audio works without any interaction.
+            console.log('First visit. Audio is optimistic — will show banner only if playback fails.');
             addGlobalUnlockListeners();
         }
     }
 
-    function trySilentUnlock() {
+    function tryResumeAudioContext() {
         try {
             var AC = window.AudioContext || window.webkitAudioContext;
             if (AC) {
-                audioContext = new AC();
-                if (audioContext.state === 'running') {
-                    // AudioContext already running — audio is allowed
-                    audioUnlocked = true;
-                    console.log('Audio auto-unlocked (returning visitor)');
-                    return;
+                if (!audioContext) audioContext = new AC();
+                if (audioContext.state === 'suspended') {
+                    audioContext.resume().catch(function (e) {
+                        console.warn('Auto-resume failed:', e);
+                    });
                 }
-
-                // Try to resume — some browsers allow this for returning visitors
-                audioContext.resume().then(function () {
-                    if (audioContext.state === 'running') {
-                        audioUnlocked = true;
-                        console.log('Audio auto-unlocked via AudioContext resume');
-                    } else {
-                        // Browser still blocking — show banner as fallback
-                        showAudioBanner();
-                        addGlobalUnlockListeners();
-                    }
-                }).catch(function () {
-                    showAudioBanner();
-                    addGlobalUnlockListeners();
-                });
-            } else {
-                // No AudioContext support — assume it works
-                audioUnlocked = true;
             }
-        } catch (e) {
-            showAudioBanner();
-            addGlobalUnlockListeners();
-        }
+        } catch (e) { console.warn('AudioContext init failed', e); }
     }
 
     function addGlobalUnlockListeners() {
@@ -236,9 +214,11 @@
     }
 
     function showAudioBanner() {
-        // Create banner element if it doesn't exist
         var existing = document.getElementById('audio-unlock-banner');
-        if (existing) return;
+        if (existing) {
+            existing.classList.remove('audio-unlocked'); // Ensure it's visible if we call this again
+            return;
+        }
 
         var banner = document.createElement('div');
         banner.id = 'audio-unlock-banner';
@@ -262,52 +242,49 @@
     }
 
     function unlockAudio() {
-        if (audioUnlocked) return;
-
         try {
-            // Create and resume AudioContext to satisfy browser autoplay policy
+            // Create and resume AudioContext
             var AC = window.AudioContext || window.webkitAudioContext;
             if (AC) {
                 if (!audioContext) audioContext = new AC();
-                if (audioContext.state === 'suspended') {
-                    audioContext.resume();
-                }
+                audioContext.resume();
             }
 
-            // Play a tiny silent buffer to fully unlock the audio pipeline
+            // Play a silent buffer
             var silentAudio = new Audio('data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=');
             silentAudio.volume = 0;
             silentAudio.play().then(function () {
-                silentAudio.pause();
-                silentAudio = null;
-            }).catch(function () { /* ignore */ });
+                // Success
+                console.log('Audio unlocked via interaction.');
+                audioUnlocked = true;
+                hideAudioBanner();
+
+                // Save approval
+                try { localStorage.setItem('audio_approved', 'true'); } catch (e) { /* ignore */ }
+
+                // Play pending sound list
+                if (pendingSoundList) {
+                    var pending = pendingSoundList;
+                    pendingSoundList = null;
+                    playRandomAdhan(pending.files);
+                }
+            }).catch(function (e) {
+                console.warn('Unlock failed (interaction might be too short/invalid):', e);
+            });
 
         } catch (e) {
-            console.warn('AudioContext unlock failed:', e);
+            console.warn('Audio unlock error:', e);
         }
+    }
 
-        audioUnlocked = true;
-        console.log('Audio unlocked by user interaction');
-
-        // Save approval permanently
-        try { localStorage.setItem('audio_approved', 'true'); } catch (e) { /* ignore */ }
-
-        // Hide banner
+    function hideAudioBanner() {
         var banner = document.getElementById('audio-unlock-banner');
         if (banner) {
             banner.classList.add('audio-unlocked');
-            setTimeout(function () {
-                if (banner.parentNode) banner.parentNode.removeChild(banner);
-            }, 500);
-        }
-
-        // Play pending sound if one was queued while locked
-        if (pendingSound) {
-            var file = pendingSound;
-            pendingSound = null;
-            playSound(file);
+            // We don't remove it from DOM, just hide it, so we can show it again if needed
         }
     }
+
 
     // ============================
     //  BACKGROUND
@@ -783,71 +760,126 @@
     function playRandomAdhan(list) {
         if (!list || list.length === 0) return;
 
-        var shuffled = shuffleArray(list);
+        // Filter out invalid entries (empty strings, non-strings)
+        var validList = list.filter(function (f) {
+            return typeof f === 'string' && f.trim().length > 0;
+        });
+        if (validList.length === 0) return;
+
+        var shuffled = shuffleArray(validList);
         tryPlayFromList(shuffled, 0);
     }
 
     function tryPlayFromList(files, index) {
-        if (index >= files.length) return; // all files failed, stay silent
+        if (index >= files.length) {
+            console.log('All sound files failed or not found. Staying silent.');
+            return;
+        }
 
         var file = files[index];
 
-        if (!audioUnlocked) {
-            // Audio not yet unlocked — queue and pulse banner
-            pendingSound = file;
-            var banner = document.getElementById('audio-unlock-banner');
-            if (banner) banner.classList.add('audio-unlock-pulse');
-            console.warn('Audio not unlocked yet. Sound queued:', file);
-            return;
+        // Stop current audio if any
+        if (currentAudio) {
+            currentAudio.pause();
+            currentAudio.currentTime = 0;
+            currentAudio = null;
         }
 
-        try {
-            var audio = new Audio(file);
+        var audio = new Audio();
+        audio.volume = 1.0;
 
-            audio.addEventListener('error', function () {
-                console.warn('Sound file not found, trying next:', file);
-                if (currentAudio === audio) currentAudio = null;
-                tryPlayFromList(files, index + 1);
-            });
-
-            audio.addEventListener('ended', function () {
-                if (currentAudio === audio) currentAudio = null;
-            });
-
-            currentAudio = audio;
-            audio.play().catch(function (err) {
-                console.warn('Audio play failed for:', file, err);
-                if (currentAudio === audio) currentAudio = null;
-                tryPlayFromList(files, index + 1);
-            });
-        } catch (e) {
-            console.error('Audio creation error:', e);
+        // Handle file load errors (404, network error, bad format)
+        audio.addEventListener('error', function () {
+            console.warn('Audio file failed to load:', file, '— trying next.');
+            if (currentAudio === audio) currentAudio = null;
             tryPlayFromList(files, index + 1);
+        });
+
+        // Clean up after playback ends
+        audio.addEventListener('ended', function () {
+            if (currentAudio === audio) currentAudio = null;
+        });
+
+        // Set source and attempt playback
+        audio.src = file;
+        currentAudio = audio;
+
+        var playPromise = audio.play();
+
+        if (playPromise !== undefined) {
+            playPromise.then(function () {
+                // Playback success!
+                console.log('Playing sound:', file);
+                audioUnlocked = true;
+                hideAudioBanner();
+                // Save approval on successful play
+                try { localStorage.setItem('audio_approved', 'true'); } catch (e) { /* ignore */ }
+            })
+                .catch(function (error) {
+                    console.warn('Playback failed for:', file, error);
+
+                    if (error.name === 'NotAllowedError' || error.message.indexOf('user agent') !== -1) {
+                        // Autoplay blocked by browser policy
+                        console.error('Autoplay blocked! Showing banner.');
+                        audioUnlocked = false;
+                        pendingSoundList = { files: files }; // Queue entire list
+                        showAudioBanner();
+                    } else {
+                        // Other error (decode, abort) — try next file
+                        if (currentAudio === audio) currentAudio = null;
+                        tryPlayFromList(files, index + 1);
+                    }
+                });
         }
     }
 
+
+
     function playSound(file) {
-        if (!audioUnlocked) {
-            // Audio not yet unlocked — queue the sound and pulse the banner
-            pendingSound = file;
-            var banner = document.getElementById('audio-unlock-banner');
-            if (banner) banner.classList.add('audio-unlock-pulse');
-            console.warn('Audio not unlocked yet. Sound queued:', file);
-            return;
+        if (!file || typeof file !== 'string' || file.trim().length === 0) return;
+
+        // Stop current audio if any
+        if (currentAudio) {
+            currentAudio.pause();
+            currentAudio.currentTime = 0;
+            currentAudio = null;
         }
 
         try {
-            var audio = new Audio(file);
+            var audio = new Audio();
+            audio.volume = 1.0;
+
+            audio.addEventListener('error', function () {
+                console.warn('Audio file failed to load (playSound):', file);
+                if (currentAudio === audio) currentAudio = null;
+            });
 
             audio.addEventListener('ended', function () {
                 if (currentAudio === audio) currentAudio = null;
             });
 
+            audio.src = file;
             currentAudio = audio;
-            audio.play().catch(function (err) {
-                console.warn('Audio play failed:', err);
-                if (currentAudio === audio) currentAudio = null;
-            });
+
+            var playPromise = audio.play();
+            if (playPromise !== undefined) {
+                playPromise.then(function () {
+                    console.log('Sound played successfully:', file);
+                    audioUnlocked = true;
+                    hideAudioBanner();
+                    try { localStorage.setItem('audio_approved', 'true'); } catch (e) { /* ignore */ }
+                })
+                    .catch(function (err) {
+                        console.warn('Audio play failed:', err);
+                        if (err.name === 'NotAllowedError' || err.message.indexOf('user agent') !== -1) {
+                            console.error('Autoplay blocked (playSound)! Showing banner.');
+                            audioUnlocked = false;
+                            pendingSoundList = { files: [file] };
+                            showAudioBanner();
+                        }
+                        if (currentAudio === audio) currentAudio = null;
+                    });
+            }
         } catch (e) {
             console.error('Audio creation error:', e);
         }
@@ -1024,12 +1056,18 @@
     // ============================
 
     function scheduleRefresh() {
+        // Calculate ms until next midnight in the mosque's timezone
         var now = new Date();
-        var localStr = now.toLocaleString('en-US', { timeZone: CONFIG.timezone });
-        var local = new Date(localStr);
-        var midnight = new Date(local);
-        midnight.setHours(24, 0, 5, 0);
-        var msUntilMidnight = midnight.getTime() - local.getTime();
+        var dateParts = getLocalDateParts(now);
+        var timeParts = getLocalTimeParts(now);
+
+        // Seconds until midnight + 5 second buffer
+        var secondsInDay = timeParts.hours * 3600 + timeParts.minutes * 60 + timeParts.seconds;
+        var secondsUntilMidnight = (24 * 3600) - secondsInDay + 5;
+        var msUntilMidnight = secondsUntilMidnight * 1000;
+
+        // Clamp to reasonable range (1 min .. 25 hours)
+        msUntilMidnight = Math.max(60000, Math.min(msUntilMidnight, 90000000));
 
         setTimeout(function () {
             fetchPrayerTimes();
